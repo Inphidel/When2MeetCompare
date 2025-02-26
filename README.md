@@ -17,6 +17,8 @@ pip install requests beautifulsoup4 pytz
 - Set Meeting Duration: Adjust the slot_duration variable to your desired meeting length in minutes (default is 30 minutes).
 - Run the Script: Execute the script to see the overlapping time slots where all groups are available.
 
+![Example](https://raw.githubusercontent.com/Inphidel/When2MeetCompare/main/Compare.png)
+
 Example URLS:
 ```
 when2meet_links = [
