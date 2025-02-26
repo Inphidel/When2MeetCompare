@@ -16,22 +16,67 @@ pip install requests beautifulsoup4 pytz
 - Update the Links: Replace the URLs in the when2meet_links list with your own When2Meet URLs.
 - Set Meeting Duration: Adjust the slot_duration variable to your desired meeting length in minutes (default is 30 minutes).
 - Run the Script: Execute the script to see the overlapping time slots where all groups are available.
-Here’s an example of how to use it:
 
+Example URLS:
 ```
 when2meet_links = [
-    "https://www.when2meet.com/?29202537-8Ue7q",
-    "https://www.when2meet.com/?29263246-ePIGh"
-]
-slot_duration = 30  # Meeting duration in minutes
-results = process_when2meet_links(when2meet_links, slot_duration=slot_duration)
+        "https://www.when2meet.com/?29202537-8Ue7q",  # Captain's team
+        "https://www.when2meet.com/?29263246-ePIGh",  # Opponent 1
+        "https://www.when2meet.com/?29202537-8Ue7q"   # Opponent 2
+    ]
+```
+Output:
+```
+Overlapping slots between Howlers Week 1 and Other Test:
+  - Fri 28 Feb 2025 08:15 PM - 08:45 PM EST
+  - Fri 28 Feb 2025 08:30 PM - 09:00 PM EST
+  - Fri 28 Feb 2025 08:45 PM - 09:15 PM EST
+  - Fri 28 Feb 2025 09:00 PM - 09:30 PM EST
+  - Fri 28 Feb 2025 09:15 PM - 09:45 PM EST
+  - Fri 28 Feb 2025 09:30 PM - 10:00 PM EST
+  - Fri 28 Feb 2025 09:45 PM - 10:15 PM EST
+  - Fri 28 Feb 2025 10:00 PM - 10:30 PM EST
+  - Sat 01 Mar 2025 08:15 PM - 08:45 PM EST
+  - Sat 01 Mar 2025 08:30 PM - 09:00 PM EST
+  - Sat 01 Mar 2025 08:45 PM - 09:15 PM EST
+  - Sat 01 Mar 2025 09:00 PM - 09:30 PM EST
+  - Sat 01 Mar 2025 09:15 PM - 09:45 PM EST
+  - Sat 01 Mar 2025 09:30 PM - 10:00 PM EST
+  - Sat 01 Mar 2025 09:45 PM - 10:15 PM EST
+  - Sat 01 Mar 2025 10:00 PM - 10:30 PM EST
 
-if isinstance(results, list):
-    print(f"Overlapping {slot_duration}-minute slots with maximum availability:")
-    for slot in results:
-        print(f"  - {slot}")
-else:
-    print(results)
+Overlapping slots between Howlers Week 1 and Howlers Week 1:
+  - Fri 28 Feb 2025 07:00 PM - 07:30 PM EST
+  - Fri 28 Feb 2025 07:15 PM - 07:45 PM EST
+  - Fri 28 Feb 2025 07:30 PM - 08:00 PM EST
+  - Fri 28 Feb 2025 07:45 PM - 08:15 PM EST
+  - Fri 28 Feb 2025 08:00 PM - 08:30 PM EST
+  - Fri 28 Feb 2025 08:15 PM - 08:45 PM EST
+  - Fri 28 Feb 2025 08:30 PM - 09:00 PM EST
+  - Fri 28 Feb 2025 08:45 PM - 09:15 PM EST
+  - Fri 28 Feb 2025 09:00 PM - 09:30 PM EST
+  - Fri 28 Feb 2025 09:15 PM - 09:45 PM EST
+  - Fri 28 Feb 2025 09:30 PM - 10:00 PM EST
+  - Fri 28 Feb 2025 09:45 PM - 10:15 PM EST
+  - Fri 28 Feb 2025 10:00 PM - 10:30 PM EST
+  - Fri 28 Feb 2025 10:15 PM - 10:45 PM EST
+  - Fri 28 Feb 2025 10:30 PM - 11:00 PM EST
+  - Sat 01 Mar 2025 07:00 PM - 07:30 PM EST
+  - Sat 01 Mar 2025 07:15 PM - 07:45 PM EST
+  - Sat 01 Mar 2025 07:30 PM - 08:00 PM EST
+  - Sat 01 Mar 2025 07:45 PM - 08:15 PM EST
+  - Sat 01 Mar 2025 08:00 PM - 08:30 PM EST
+  - Sat 01 Mar 2025 08:15 PM - 08:45 PM EST
+  - Sat 01 Mar 2025 08:30 PM - 09:00 PM EST
+  - Sat 01 Mar 2025 08:45 PM - 09:15 PM EST
+  - Sat 01 Mar 2025 09:00 PM - 09:30 PM EST
+  - Sat 01 Mar 2025 09:15 PM - 09:45 PM EST
+  - Sat 01 Mar 2025 09:30 PM - 10:00 PM EST
+  - Sat 01 Mar 2025 09:45 PM - 10:15 PM EST
+  - Sat 01 Mar 2025 10:00 PM - 10:30 PM EST
+  - Sat 01 Mar 2025 10:15 PM - 10:45 PM EST
+  - Sat 01 Mar 2025 10:30 PM - 11:00 PM EST
+
 ```
 # Notes
 - The slot_duration is adjustable to any number of minutes (e.g., 60 for an hour-long meeting).
