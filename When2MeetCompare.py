@@ -1,41 +1,52 @@
 import requests
-import re
 from bs4 import BeautifulSoup
+import re
 from datetime import datetime
 import pytz
 import math
 
-# Function to extract event ID from a When2Meet link
+# Extract event ID from a When2Meet link
 def extract_event_id(link):
     match = re.search(r'\?(\d+)-', link)
     if match:
         return match.group(1)
     raise ValueError(f"Invalid When2Meet link: {link}")
 
-# Function to fetch HTML from a When2Meet URL
+# Fetch HTML from a When2Meet URL
 def fetch_html(link):
     response = requests.get(link)
     if response.status_code == 200:
         return response.text
     raise Exception(f"Failed to fetch {link}: Status {response.status_code}")
 
-# Function to extract availability data from HTML
+# Extract team name from HTML
+def extract_event_name(html):
+    soup = BeautifulSoup(html, 'html.parser')
+    event_name_div = soup.find('div', id='NewEventNameDiv')
+    if event_name_div:
+        full_text = event_name_div.get_text(separator=' ', strip=True)
+        if 'To invite' in full_text:
+            return full_text.split('To invite')[0].strip()
+        return full_text.split('\n')[0].strip()
+    return "Unknown Event"
+
+# Extract availability data from HTML
 def extract_availability_data(html):
     soup = BeautifulSoup(html, 'html.parser')
     script_tags = soup.find_all('script', type='text/javascript')
 
     time_of_slot = {}
     available_at_slot = {}
+    people_names = {}
+    people_ids = []
 
     for script in script_tags:
         if script.string:
-            # Extract TimeOfSlot: maps slot index to timestamp
-            time_matches = re.findall(r'TimeOfSlot\[(\d+)\]=(\d+);', script.string)
+            time_matches = re.findall(r'TimeOfSlot\[\s*(\d+)\s*\]\s*=\s*(\d+)\s*;', script.string)
             for index, timestamp in time_matches:
                 time_of_slot[int(index)] = int(timestamp)
 
-            # Extract AvailableAtSlot: maps slot index to list of person IDs
-            avail_matches = re.findall(r'AvailableAtSlot\[(\d+)\]\.push\((\d+)\);', script.string)
+            avail_matches = re.findall(r'AvailableAtSlot\[\s*(\d+)\s*\]\.push\(\s*(\d+)\s*\);', script.string)
             for index, person_id in avail_matches:
                 index = int(index)
                 person_id = int(person_id)
@@ -43,79 +54,97 @@ def extract_availability_data(html):
                     available_at_slot[index] = []
                 available_at_slot[index].append(person_id)
 
-    return time_of_slot, available_at_slot
+            name_matches = re.findall(r'PeopleNames\[\s*(\d+)\s*\]\s*=\s*\'([^\']+)\'\s*;\s*PeopleIDs\[\s*\1\s*\]\s*=\s*(\d+)\s*;', script.string)
+            for index, name, pid in name_matches:
+                people_names[int(pid)] = name
+                people_ids.append(int(pid))
 
-# Function to find timestamps where availability is maximum for a link
-def find_max_availability_slots(time_of_slot, available_at_slot):
-    if not available_at_slot:
-        return set()
-    # Find the maximum number of people available in any slot
-    max_avail = max(len(available_at_slot[slot]) for slot in available_at_slot)
-    # Collect timestamps where availability equals the maximum
-    max_timestamps = {time_of_slot[slot] for slot in available_at_slot if len(available_at_slot[slot]) == max_avail}
-    return max_timestamps
+    if not time_of_slot or not available_at_slot:
+        raise ValueError("Failed to extract availability data")
+    return time_of_slot, available_at_slot, people_names, people_ids
 
-# Function to find valid starting times for meetings of specified duration
-def find_valid_starts(intersection_set, slot_duration=30, slot_interval=15):
-    # Calculate number of consecutive 15-minute slots needed
-    num_slots = math.ceil(slot_duration / slot_interval)
-    slot_offset = slot_interval * 60  # Convert interval to seconds (15 min = 900 sec)
-    sorted_intersection = sorted(intersection_set)
-    valid_starts = []
-    # Check each timestamp to see if the required consecutive slots are available
-    for t in sorted_intersection:
-        if all((t + i * slot_offset) in intersection_set for i in range(1, num_slots)):
-            valid_starts.append(t)
-    return valid_starts
+# Find the best times from availability data
+def find_best_times(time_of_slot, available_at_slot, people_names, timezone='UTC'):
+    if not time_of_slot or not available_at_slot:
+        return []
+    total_participants = len(set().union(*available_at_slot.values()))
+    slot_counts = {slot: len(people) for slot, people in available_at_slot.items()}
+    max_count = max(slot_counts.values()) if slot_counts else 0
 
-# Main function to process multiple When2Meet links and find overlapping slots
-def process_when2meet_links(links, timezone='America/New_York', slot_duration=30):
-    all_max_timestamps = []
-    for link in links:
-        try:
-            html = fetch_html(link)
-            time_of_slot, available_at_slot = extract_availability_data(html)
-            max_timestamps = find_max_availability_slots(time_of_slot, available_at_slot)
-            all_max_timestamps.append(max_timestamps)
-        except Exception as e:
-            print(f"Error processing {link}: {e}")
-            continue
-
-    # Check if any data was successfully processed
-    if not all_max_timestamps:
-        return "No valid data found for any link"
-
-    # Find the intersection of maximum availability slots across all links
-    intersection_set = set.intersection(*all_max_timestamps)
-    if not intersection_set:
-        return "No overlapping times found"
-
-    # Find valid starting times for the specified meeting duration
-    valid_starts = find_valid_starts(intersection_set, slot_duration=slot_duration)
-    if not valid_starts:
-        return f"No overlapping slots for {slot_duration}-minute meetings"
-
-    # Convert timestamps to readable format with start and end times
+    best_slots = []
     tz = pytz.timezone(timezone)
-    readable_slots = [
+    for slot, count in slot_counts.items():
+        if count == max_count:
+            dt = datetime.fromtimestamp(time_of_slot[slot], tz)
+            best_slots.append({
+                'timestamp': time_of_slot[slot],
+                'readable_time': dt.strftime('%a %d %b %Y %I:%M %p %Z'),
+            })
+    return best_slots
+
+# Find overlapping slots between two teams
+def find_overlapping_slots(best_times_a, best_times_b, slot_duration=30, timezone='America/New_York'):
+    timestamps_a = set(bt['timestamp'] for bt in best_times_a)
+    timestamps_b = set(bt['timestamp'] for bt in best_times_b)
+    common_timestamps = timestamps_a.intersection(timestamps_b)
+
+    if not common_timestamps:
+        return []
+
+    sorted_timestamps = sorted(common_timestamps)
+    slot_seconds = slot_duration * 60
+    valid_starts = []
+    for i in range(len(sorted_timestamps) - 1):
+        if sorted_timestamps[i + 1] - sorted_timestamps[i] == 900:  # 15-minute intervals
+            required_slots = math.ceil(slot_duration / 15)
+            if all((sorted_timestamps[i] + j * 900) in common_timestamps for j in range(1, required_slots)):
+                valid_starts.append(sorted_timestamps[i])
+
+    tz = pytz.timezone(timezone)
+    return [
         f"{datetime.fromtimestamp(t, tz).strftime('%a %d %b %Y %I:%M %p')} - "
-        f"{datetime.fromtimestamp(t + slot_duration*60, tz).strftime('%I:%M %p %Z')}"
-        for t in sorted(valid_starts)
+        f"{datetime.fromtimestamp(t + slot_seconds, tz).strftime('%I:%M %p %Z')}"
+        for t in valid_starts
     ]
-    return readable_slots
+
+# Process the list of When2Meet links
+def process_when2meet_links(links, timezone='America/New_York', slot_duration=30):
+    if len(links) < 2:
+        return "Please provide at least two When2Meet links"
+
+    # Process captain's team (first link)
+    captain_link = links[0]
+    try:
+        captain_html = fetch_html(captain_link)
+        captain_name = extract_event_name(captain_html)
+        time_of_slot, available_at_slot, people_names, _ = extract_availability_data(captain_html)
+        captain_best_times = find_best_times(time_of_slot, available_at_slot, people_names, timezone)
+    except Exception as e:
+        return f"Error processing captain's link {captain_link}: {str(e)}"
+
+    results = []
+    for opponent_link in links[1:]:
+        try:
+            opponent_html = fetch_html(opponent_link)
+            opponent_name = extract_event_name(opponent_html)
+            time_of_slot, available_at_slot, people_names, _ = extract_availability_data(opponent_html)
+            opponent_best_times = find_best_times(time_of_slot, available_at_slot, people_names, timezone)
+            overlapping_slots = find_overlapping_slots(captain_best_times, opponent_best_times, slot_duration, timezone)
+            if overlapping_slots:
+                results.append(f"Overlapping slots between {captain_name} and {opponent_name}:\n" + "\n".join([f"  - {slot}" for slot in overlapping_slots]))
+            else:
+                results.append(f"No overlapping slots found between {captain_name} and {opponent_name}")
+        except Exception as e:
+            results.append(f"Error processing {opponent_link}: {str(e)}")
+    return "\n\n".join(results)
 
 # Example usage
 if __name__ == "__main__":
     when2meet_links = [
-        "https://www.when2meet.com/?29202537-8Ue7q",
-        "https://www.when2meet.com/?29263246-ePIGh"
+        "https://www.when2meet.com/?29202537-8Ue7q",  # Captain's team
+        "https://www.when2meet.com/?29263246-ePIGh",  # Opponent 1
+        "https://www.when2meet.com/?29202537-8Ue7q"   # Opponent 2
     ]
-    slot_duration = 30  # Meeting duration in minutes, adjustable
+    slot_duration = 30  # Duration in minutes
     results = process_when2meet_links(when2meet_links, slot_duration=slot_duration)
-
-    if isinstance(results, list):
-        print(f"Overlapping {slot_duration}-minute slots with maximum availability:")
-        for slot in results:
-            print(f"  - {slot}")
-    else:
-        print(results)
+    print(results)
